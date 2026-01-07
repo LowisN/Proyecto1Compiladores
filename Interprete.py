@@ -80,12 +80,12 @@ class Interprete:
             parser = Parser(tokens)
             parser.parse()
             
-            print("✓ Análisis sintáctico exitoso: La expresión es válida")
+            print("Análisis sintáctico exitoso: La expresión es válida")
             print()
             
         except Exception as ex:
             # Mostrar el error
-            print(f"\n✗ ERROR:")
+            print(f"\nERROR:")
             print(f"  {str(ex)}")
             print()
             Interprete.existen_errores = True

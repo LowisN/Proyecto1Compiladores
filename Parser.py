@@ -7,19 +7,21 @@ class Parser:
     
     Gramática implementada (descenso recursivo predictivo):
     
-    programa -> expresion EOF
-    expresion -> asignacion
-    asignacion -> IDENTIFIER = asignacion | logica_or
-    logica_or -> logica_and (== logica_and)*
-    logica_and -> igualdad
-    igualdad -> comparacion ((==) comparacion)*
-    comparacion -> termino
-    termino -> factor ((+ | -) factor)*
-    factor -> unario ((* | / | %) unario)*
-    unario -> (+ | -) unario | primario
-    primario -> NUMBER | STRING | null | IDENTIFIER | (expresion) | llamada
-    llamada -> IDENTIFIER (argumentos)?
-    argumentos -> expresion (, expresion)*
+    STATEMENT -> EXPRESSION SEMICOLON_OPC
+    SEMICOLON_OPC -> ; | Ɛ
+    EXPRESSION -> ASSIGNMENT
+    ASSIGNMENT -> TERM ASSIGNMENT_OPC
+    ASSIGNMENT_OPC -> = EXPRESSION | Ɛ
+    TERM -> FACTOR TERM'
+    TERM' -> - TERM | + TERM | Ɛ
+    FACTOR -> UNARY FACTOR'
+    FACTOR' -> / FACTOR | * FACTOR | % FACTOR | Ɛ
+    UNARY -> - UNARY | CALL
+    CALL -> PRIMARY CALL'
+    CALL' -> ( ARGUMENTS ) | Ɛ
+    PRIMARY -> null | number | string | id | ( EXPRESSION )
+    ARGUMENTS -> EXPRESSION ARGUMENTS' | Ɛ
+    ARGUMENTS' -> , EXPRESSION ARGUMENTS' | Ɛ
     """
     
     def __init__(self, tokens):
@@ -44,7 +46,7 @@ class Parser:
             Exception: Si hay errores sintácticos
         """
         try:
-            self.programa()
+            self.statement()
             
             if self.errores:
                 raise Exception("\n".join(self.errores))
@@ -55,108 +57,97 @@ class Parser:
                 self.errores.append(str(e))
             raise Exception("\n".join(self.errores))
     
-    def programa(self):
-        """programa -> expresion EOF"""
-        self.expresion()
+    def statement(self):
+        """STATEMENT -> EXPRESSION SEMICOLON_OPC"""
+        self.expression()
+        self.semicolon_opc()
         
-        # Verificar que estamos en EOF (no es un error, es lo esperado)
+        # Verificar que estamos en EOF
         if not self.is_at_end():
-            self.error("Se esperaba fin de cadena después de la expresión")
+            self.error("Se esperaba fin de cadena después de la sentencia")
     
-    def expresion(self):
-        """expresion -> asignacion"""
-        self.asignacion()
+    def semicolon_opc(self):
+        """SEMICOLON_OPC -> ; | Ɛ"""
+        self.match(TipoToken.SEMICOLON)  # Opcional, no falla si no está
     
-    def asignacion(self):
-        """asignacion -> IDENTIFIER = asignacion | logica_or"""
-        # Verificar si es una asignación
-        if self.check(TipoToken.IDENTIFIER):
-            # Guardar la posición actual
-            posicion_guardada = self.actual
-            self.advance()
-            
-            if self.match(TipoToken.EQUAL):
-                # Es una asignación
-                self.asignacion()
-                return
-            else:
-                # No es una asignación, retroceder
-                self.actual = posicion_guardada
-        
-        self.logica_or()
+    def expression(self):
+        """EXPRESSION -> ASSIGNMENT"""
+        self.assignment()
     
-    def logica_or(self):
-        """logica_or -> logica_and (== logica_and)*"""
-        self.logica_and()
-        
-        while self.match(TipoToken.EQUAL_EQUAL):
-            self.logica_and()
+    def assignment(self):
+        """ASSIGNMENT -> TERM ASSIGNMENT_OPC"""
+        self.term()
+        self.assignment_opc()
     
-    def logica_and(self):
-        """logica_and -> igualdad"""
-        self.igualdad()
+    def assignment_opc(self):
+        """ASSIGNMENT_OPC -> = EXPRESSION | Ɛ"""
+        if self.match(TipoToken.EQUAL):
+            self.expression()
     
-    def igualdad(self):
-        """igualdad -> comparacion ((==) comparacion)*"""
-        self.comparacion()
-        
-        while self.match(TipoToken.EQUAL_EQUAL):
-            self.comparacion()
-    
-    def comparacion(self):
-        """comparacion -> termino"""
-        self.termino()
-    
-    def termino(self):
-        """termino -> factor ((+ | -) factor)*"""
+    def term(self):
+        """TERM -> FACTOR TERM'"""
         self.factor()
-        
-        while self.match(TipoToken.PLUS, TipoToken.MINUS):
-            self.factor()
+        self.term_prime()
+    
+    def term_prime(self):
+        """TERM' -> - TERM | + TERM | Ɛ"""
+        if self.match(TipoToken.MINUS):
+            self.term()
+        elif self.match(TipoToken.PLUS):
+            self.term()
+        # Ɛ - no hacer nada
     
     def factor(self):
-        """factor -> unario ((* | / | %) unario)*"""
-        self.unario()
-        
-        while self.match(TipoToken.STAR, TipoToken.SLASH, TipoToken.MOD):
-            self.unario()
+        """FACTOR -> UNARY FACTOR'"""
+        self.unary()
+        self.factor_prime()
     
-    def unario(self):
-        """unario -> (+ | -) unario | primario"""
-        if self.match(TipoToken.PLUS, TipoToken.MINUS):
-            self.unario()
+    def factor_prime(self):
+        """FACTOR' -> / FACTOR | * FACTOR | % FACTOR | Ɛ"""
+        if self.match(TipoToken.SLASH):
+            self.factor()
+        elif self.match(TipoToken.STAR):
+            self.factor()
+        elif self.match(TipoToken.MOD):
+            self.factor()
+        # Ɛ - no hacer nada
+    
+    def unary(self):
+        """UNARY -> - UNARY | CALL"""
+        if self.match(TipoToken.MINUS):
+            self.unary()
+        else:
+            self.call()
+    
+    def call(self):
+        """CALL -> PRIMARY CALL'"""
+        self.primary()
+        self.call_prime()
+    
+    def call_prime(self):
+        """CALL' -> ( ARGUMENTS ) | Ɛ"""
+        if self.match(TipoToken.LEFT_PAREN):
+            self.arguments()
+            if not self.match(TipoToken.RIGHT_PAREN):
+                self.error("Se esperaba ')' después de los argumentos")
+        # Ɛ - no hacer nada
+    
+    def primary(self):
+        """PRIMARY -> null | number | string | id | ( EXPRESSION )"""
+        if self.match(TipoToken.NULL):
             return
         
-        self.primario()
-    
-    def primario(self):
-        """primario -> NUMBER | STRING | null | IDENTIFIER | (expresion) | llamada"""
-        # Literales
         if self.match(TipoToken.NUMBER):
             return
         
         if self.match(TipoToken.STRING):
             return
         
-        if self.match(TipoToken.NULL):
-            return
-        
-        # Identificador o llamada a función
         if self.match(TipoToken.IDENTIFIER):
-            # Verificar si es una llamada a función
-            if self.match(TipoToken.LEFT_PAREN):
-                # Es una llamada a función
-                if not self.check(TipoToken.RIGHT_PAREN):
-                    self.argumentos()
-                
-                if not self.match(TipoToken.RIGHT_PAREN):
-                    self.error("Se esperaba ')' después de los argumentos")
             return
         
-        # Expresión entre paréntesis
         if self.match(TipoToken.LEFT_PAREN):
-            self.expresion()
-            
+            self.expression()
             if not self.match(TipoToken.RIGHT_PAREN):
                 self.error("Se esperaba ')' después de la expresión")
             return
@@ -165,12 +156,21 @@ class Parser:
         token_actual = self.peek()
         self.error(f"Expresión esperada, se encontró: '{token_actual.lexema}'")
     
-    def argumentos(self):
-        """argumentos -> expresion (, expresion)*"""
-        self.expresion()
+    def arguments(self):
+        """ARGUMENTS -> EXPRESSION ARGUMENTS' | Ɛ"""
+        # Verificar si hay argumentos (Ɛ)
+        if self.check(TipoToken.RIGHT_PAREN):
+            return  # Ɛ - no hay argumentos
         
-        while self.match(TipoToken.COMMA):
-            self.expresion()
+        self.expression()
+        self.arguments_prime()
+    
+    def arguments_prime(self):
+        """ARGUMENTS' -> , EXPRESSION ARGUMENTS' | Ɛ"""
+        if self.match(TipoToken.COMMA):
+            self.expression()
+            self.arguments_prime()  # Recursión
+        # Ɛ - no hacer nada
     
     def match(self, *tipos):
         """
