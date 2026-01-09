@@ -1,5 +1,6 @@
 from Token import Token
 from TipoToken import TipoToken
+from ASA import *
 
 class Parser:
     """
@@ -40,18 +41,18 @@ class Parser:
         Inicia el análisis sintáctico
         
         Returns:
-            bool: True si el análisis fue exitoso, False en caso contrario
+            Nodo: Raíz del árbol de sintaxis abstracta
             
         Raises:
             Exception: Si hay errores sintácticos
         """
         try:
-            self.statement()
+            ast = self.statement()
             
             if self.errores:
                 raise Exception("\n".join(self.errores))
             
-            return True
+            return ast
         except Exception as e:
             if not self.errores:
                 self.errores.append(str(e))
@@ -59,98 +60,119 @@ class Parser:
     
     def statement(self):
         """STATEMENT -> EXPRESSION SEMICOLON_OPC"""
-        self.expression()
-        self.semicolon_opc()
+        expr = self.expression()
+        tiene_semicolon = self.semicolon_opc()
         
         # Verificar que estamos en EOF
         if not self.is_at_end():
             self.error("Se esperaba fin de cadena después de la sentencia")
+        
+        return Sentencia(expr, tiene_semicolon)
     
     def semicolon_opc(self):
         """SEMICOLON_OPC -> ; | Ɛ"""
-        self.match(TipoToken.SEMICOLON)  # Opcional, no falla si no está
+        return self.match(TipoToken.SEMICOLON)  # Retorna True si hay ';', False si no
     
     def expression(self):
         """EXPRESSION -> ASSIGNMENT"""
-        self.assignment()
+        return self.assignment()
     
     def assignment(self):
         """ASSIGNMENT -> TERM ASSIGNMENT_OPC"""
-        self.term()
-        self.assignment_opc()
+        expr = self.term()
+        return self.assignment_opc(expr)
     
-    def assignment_opc(self):
+    def assignment_opc(self, izquierda):
         """ASSIGNMENT_OPC -> = EXPRESSION | Ɛ"""
         if self.match(TipoToken.EQUAL):
-            self.expression()
+            valor = self.expression()
+            # Validar que el lado izquierdo sea una variable
+            if not isinstance(izquierda, Variable):
+                self.error("Objetivo de asignación inválido. Solo se pueden asignar variables.")
+            return Asignacion(izquierda.nombre, valor)
+        return izquierda
     
     def term(self):
         """TERM -> FACTOR TERM'"""
-        self.factor()
-        self.term_prime()
+        expr = self.factor()
+        return self.term_prime(expr)
     
-    def term_prime(self):
+    def term_prime(self, izquierda):
         """TERM' -> - TERM | + TERM | Ɛ"""
         if self.match(TipoToken.MINUS):
-            self.term()
+            operador = self.previous()
+            derecha = self.term()
+            return Binaria(izquierda, operador, derecha)
         elif self.match(TipoToken.PLUS):
-            self.term()
-        # Ɛ - no hacer nada
+            operador = self.previous()
+            derecha = self.term()
+            return Binaria(izquierda, operador, derecha)
+        return izquierda
     
     def factor(self):
         """FACTOR -> UNARY FACTOR'"""
-        self.unary()
-        self.factor_prime()
+        expr = self.unary()
+        return self.factor_prime(expr)
     
-    def factor_prime(self):
+    def factor_prime(self, izquierda):
         """FACTOR' -> / FACTOR | * FACTOR | % FACTOR | Ɛ"""
         if self.match(TipoToken.SLASH):
-            self.factor()
+            operador = self.previous()
+            derecha = self.factor()
+            return Binaria(izquierda, operador, derecha)
         elif self.match(TipoToken.STAR):
-            self.factor()
+            operador = self.previous()
+            derecha = self.factor()
+            return Binaria(izquierda, operador, derecha)
         elif self.match(TipoToken.MOD):
-            self.factor()
-        # Ɛ - no hacer nada
+            operador = self.previous()
+            derecha = self.factor()
+            return Binaria(izquierda, operador, derecha)
+        return izquierda
     
     def unary(self):
         """UNARY -> - UNARY | CALL"""
         if self.match(TipoToken.MINUS):
-            self.unary()
+            operador = self.previous()
+            expr = self.unary()
+            return Unaria(operador, expr)
         else:
-            self.call()
+            return self.call()
     
     def call(self):
         """CALL -> PRIMARY CALL'"""
-        self.primary()
-        self.call_prime()
+        expr = self.primary()
+        return self.call_prime(expr)
     
-    def call_prime(self):
+    def call_prime(self, callee):
         """CALL' -> ( ARGUMENTS ) | Ɛ"""
         if self.match(TipoToken.LEFT_PAREN):
-            self.arguments()
+            argumentos = self.arguments()
             if not self.match(TipoToken.RIGHT_PAREN):
                 self.error("Se esperaba ')' después de los argumentos")
-        # Ɛ - no hacer nada
+            parentesis = self.previous()
+            return Llamada(callee, parentesis, argumentos)
+        return callee
     
     def primary(self):
         """PRIMARY -> null | number | string | id | ( EXPRESSION )"""
         if self.match(TipoToken.NULL):
-            return
+            return Literal(None)
         
         if self.match(TipoToken.NUMBER):
-            return
+            return Literal(self.previous().opcional)
         
         if self.match(TipoToken.STRING):
-            return
+            return Literal(self.previous().opcional)
         
         if self.match(TipoToken.IDENTIFIER):
-            return
+            return Variable(self.previous())
         
         if self.match(TipoToken.LEFT_PAREN):
-            self.expression()
+            expr = self.expression()
             if not self.match(TipoToken.RIGHT_PAREN):
                 self.error("Se esperaba ')' después de la expresión")
-            return
+            return Agrupacion(expr)
         
         # Si llegamos aquí, hay un error
         token_actual = self.peek()
@@ -160,16 +182,18 @@ class Parser:
         """ARGUMENTS -> EXPRESSION ARGUMENTS' | Ɛ"""
         # Verificar si hay argumentos (Ɛ)
         if self.check(TipoToken.RIGHT_PAREN):
-            return  # Ɛ - no hay argumentos
+            return []  # Ɛ - no hay argumentos
         
-        self.expression()
-        self.arguments_prime()
+        args = []
+        args.append(self.expression())
+        self.arguments_prime(args)
+        return args
     
-    def arguments_prime(self):
+    def arguments_prime(self, args):
         """ARGUMENTS' -> , EXPRESSION ARGUMENTS' | Ɛ"""
         if self.match(TipoToken.COMMA):
-            self.expression()
-            self.arguments_prime()  # Recursión
+            args.append(self.expression())
+            self.arguments_prime(args)  # Recursión
         # Ɛ - no hacer nada
     
     def match(self, *tipos):
