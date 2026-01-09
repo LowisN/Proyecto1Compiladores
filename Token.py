@@ -3,36 +3,26 @@ from TipoToken import TipoToken
 class Token:
     """Clase que representa un token del lenguaje"""
     
-    def __init__(self, tipo, lexema, opcional=None):
+    def __init__(self, tipo, lexema, literal, linea):
         """
         Constructor de Token
         
         Args:
-            tipo: TipoToken - El tipo de token
-            lexema: str - El lexema (texto) del token
-            opcional: object - Valor opcional asociado al token
+            tipo: TipoToken - El tipo de token (PLUS, MINUS, etc.)
+            lexema: str - El texto original ("+", "var", "123")
+            literal: object - El valor real (5.0, "hola", None). Antes 'opcional'.
+            linea: int - El número de línea donde aparece el token.
         """
         self.tipo = tipo
         self.lexema = lexema
-        self.opcional = opcional
-    
-    def get_tipo(self):
-        """Retorna el tipo del token"""
-        return self.tipo
-    
-    def get_lexema(self):
-        """Retorna el lexema del token"""
-        return self.lexema
-    
-    def get_opcional(self):
-        """Retorna el valor opcional del token"""
-        return self.opcional
-    
+        self.literal = literal
+        self.linea = linea
+
     def __str__(self):
-        """Representación en cadena del token"""
-        opcional_str = str(self.opcional) if self.opcional is not None else ""
-        return f"<{self.tipo.value} {self.lexema} {opcional_str}>"
-    
+        """Representación en cadena para imprimir"""
+        # Esto ayuda a ver qué está pasando cuando imprimes tokens
+        val = self.literal if self.literal is not None else ""
+        return f"{self.tipo} {self.lexema} {val}"
+
     def __repr__(self):
-        """Representación del token para debugging"""
         return self.__str__()

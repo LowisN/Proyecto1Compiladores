@@ -22,7 +22,11 @@ class TipoToken(Enum):
     IDENTIFIER = "IDENTIFIER"       # Variables/identificadores
     NUMBER = "NUMBER"               # Números
     STRING = "STRING"               # Cadenas de texto
+    
+    # Palabras reservadas
     NULL = "NULL"                   # null
+    TRUE = "TRUE"                   # true  <--- AGREGAR ESTE
+    FALSE = "FALSE"                 # false <--- AGREGAR ESTE
     
     # Fin de archivo/cadena
     EOF = "EOF"
