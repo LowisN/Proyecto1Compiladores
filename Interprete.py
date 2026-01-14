@@ -16,11 +16,13 @@ Para salir: Ctrl+D (Linux/Mac) o Ctrl+Z seguido de Enter (Windows)
 import sys
 from Scanner import Scanner
 from Parser import Parser
+from Evaluador import Evaluador, ErrorSemantico
 
 class Interprete:
     """Clase principal del intérprete"""
     
     existen_errores = False
+    evaluador = Evaluador()  # Evaluador compartido para mantener el entorno
     
     @staticmethod
     def main():
@@ -59,30 +61,38 @@ class Interprete:
     @staticmethod
     def ejecutar(source):
         """
-        Ejecuta el análisis léxico y sintáctico de una cadena
+        Ejecuta el análisis léxico, sintáctico y semántico de una cadena
         
         Args:
             source: str - Cadena de entrada a analizar
         """
         try:
             # Fase 1: Análisis Léxico (Scanner)
-            print("\n--- ANÁLISIS LÉXICO ---")
             scanner = Scanner(source)
             tokens = scanner.scan()
             
-            # Mostrar los tokens generados
-            print("Tokens generados:")
-            for token in tokens:
-                print(f"  {token}")
-            
             # Fase 2: Análisis Sintáctico (Parser)
-            print("\n--- ANÁLISIS SINTÁCTICO ---")
             parser = Parser(tokens)
-            parser.parse()
+            ast = parser.parse()
             
-            print("Análisis sintáctico exitoso: La expresión es válida")
+            # Fase 3: Evaluación del ASA
+            resultado, debe_imprimir = Interprete.evaluador.evaluar(ast)
+            
+            # Imprimir el resultado si no hay punto y coma
+            if debe_imprimir:
+                if resultado is None:
+                    print("null")
+                elif isinstance(resultado, bool):
+                    print("true" if resultado else "false")
+                else:
+                    print(resultado)
+            
+        except ErrorSemantico as ex:
+            # Mostrar error semántico
+            print(f"\nERROR SEMÁNTICO:")
+            print(f"  {str(ex)}")
             print()
-            
+            Interprete.existen_errores = True
         except Exception as ex:
             # Mostrar el error
             print(f"\nERROR:")
